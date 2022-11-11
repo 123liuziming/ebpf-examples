@@ -34,20 +34,17 @@ int bpf_sockhash(struct bpf_sock_ops *skops) {
      // 添加到sock_hash中
      int ret = skh.sock_hash_update(skops, &skk, BPF_NOEXIST);
     if (ret) {
-        // bpf_trace_printk("bpf_sock_hash_update() failed. %d", -ret);
+        bpf_trace_printk("bpf_sock_hash_update() failed. %d", -ret);
         return 0;
     }
-    //bpf_trace_printk("Connection has been established: %u <--> %u", skops->local_ip4, skops->remote_ip4);
+    bpf_trace_printk("Connection has been established: %u <--> %u", skops->local_ip4, skops->remote_ip4);
     return 0;
 }
 
 int bpf_redir(struct sk_msg_md *msg) {
-    // if (msg->family != AF_INET) {
-    //     return SK_PASS;
-    // }
-    // if (msg->remote_ip4 != msg->local_ip4) {
-    //     return SK_PASS;
-    // }
+    if (msg->family != AF_INET) {
+        return SK_PASS;
+    }
     // 将local和remote进行反向
     struct sock_key skk = {
         .remote_ip4 = bpf_ntohl(msg->local_ip4),
@@ -57,7 +54,7 @@ int bpf_redir(struct sk_msg_md *msg) {
     };
     // 将入口流量转发
     int ret = skh.msg_redirect_hash(msg, &skk, BPF_F_INGRESS);
-    //bpf_trace_printk("Socket has been redirected: %d <--> %d", msg->remote_ip4, msg->local_ip4);
+    bpf_trace_printk("Socket has been redirected: %d <--> %d", msg->remote_ip4, msg->local_ip4);
     return ret;
 }
 
