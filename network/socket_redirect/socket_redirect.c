@@ -1,6 +1,6 @@
 #include <net/sock.h>
 
-#define MAX_SOCK_OPS_MAP_ENTRIES 65535
+#define MAX_SOCK_OPS_MAP_ENTRIES 1024
 
 
 typedef struct sock_key {
@@ -8,7 +8,6 @@ typedef struct sock_key {
     u32 local_ip4;
     u32 remote_port;
     u32 local_port;
-    u32 family;
 } sk_key;
 BPF_SOCKHASH(skh, sk_key, MAX_SOCK_OPS_MAP_ENTRIES);
 
@@ -26,41 +25,39 @@ int bpf_sockhash(struct bpf_sock_ops *skops) {
         return 0;
     }
     struct sock_key skk = {
-        .remote_ip4 = skops->remote_ip4,
+        .remote_ip4 = bpf_ntohl(skops->remote_ip4),
         .local_ip4  = skops->local_ip4,
         .local_port = skops->local_port,
         // 将网络字节序转为主机字节序
-        .remote_port  = bpf_ntohl(skops->remote_port),
-        .family = skops->family,
+        .remote_port = bpf_ntohl(skops->remote_port),
     };
-    // 添加到sock_hash中
-    int ret = skh.sock_hash_update(skops, &skk, BPF_NOEXIST);
+     // 添加到sock_hash中
+     int ret = skh.sock_hash_update(skops, &skk, BPF_NOEXIST);
     if (ret) {
-        bpf_trace_printk("bpf_sock_hash_update() failed. %d", -ret);
+        // bpf_trace_printk("bpf_sock_hash_update() failed. %d", -ret);
         return 0;
     }
-    bpf_trace_printk("Connection has been established: %s:%d <--> %s:%d", skk.local_ip4, skk.local_port, skk.remote_ip4, skk.remote_port);
+    //bpf_trace_printk("Connection has been established: %u <--> %u", skops->local_ip4, skops->remote_ip4);
     return 0;
 }
 
 int bpf_redir(struct sk_msg_md *msg) {
-    if (msg->family != AF_INET) {
-        return SK_PASS;
-    }
-    if (msg->remote_ip4 != msg->local_ip4) {
-        return SK_PASS;
-    }
+    // if (msg->family != AF_INET) {
+    //     return SK_PASS;
+    // }
+    // if (msg->remote_ip4 != msg->local_ip4) {
+    //     return SK_PASS;
+    // }
     // 将local和remote进行反向
     struct sock_key skk = {
-        .remote_ip4 = msg->local_ip4,
+        .remote_ip4 = bpf_ntohl(msg->local_ip4),
         .local_ip4  = msg->remote_ip4,
         .local_port = bpf_ntohl(msg->remote_port),
         .remote_port = msg->local_port,
-        .family = msg->family,
     };
-    //将入口流量转发
-    int ret = skh.sk_redirect_hash(msg, &skk, BPF_F_INGRESS);
-    bpf_trace_printk("Socket has been redirected: %s:%d <--> %s:%d", skk.local_ip4, skk.local_port, skk.remote_ip4, skk.remote_port);
+    // 将入口流量转发
+    int ret = skh.msg_redirect_hash(msg, &skk, BPF_F_INGRESS);
+    //bpf_trace_printk("Socket has been redirected: %d <--> %d", msg->remote_ip4, msg->local_ip4);
     return ret;
 }
 

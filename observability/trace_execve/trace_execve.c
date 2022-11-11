@@ -63,6 +63,7 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve)
 	return 0;
 }
 
+// 字符串比较
 static int cmp_str(const char* s1, const char* s2) {
 	if (!s1 || !s2) {
 		return -1;
